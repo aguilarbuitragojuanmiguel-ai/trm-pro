@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8787'
+const BASE = 'https://trm-pro-api.aguilarbuitragojuanmiguel.workers.dev'
 
 async function get(path) {
   const r = await fetch(`${BASE}${path}`)
