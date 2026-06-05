@@ -1,16 +1,7 @@
-// TRM PRO — Cloudflare Worker (sin Supabase)
-// Rutas:
-//   GET /trm/today
-//   GET /trm/date?fecha=YYYY-MM-DD
-//   GET /trm/range?start=YYYY-MM-DD&end=YYYY-MM-DD
-//   GET /forex/today
-//   GET /forex/date?fecha=YYYY-MM-DD
-
+// TRM PRO — Cloudflare Worker
 const DATOS_GOV_URL = 'https://www.datos.gov.co/resource/32sa-8pi3.json';
 const FRANKFURTER_URL = 'https://api.frankfurter.app';
 const MONEDAS_EXTRA = ['EUR', 'GBP', 'JPY', 'CAD', 'MXN', 'CLP', 'BRL'];
-
-// ── datos.gov.co ──────────────────────────────────────────────────────────────
 
 async function fetchTrmFromGov(fecha) {
   const url = `${DATOS_GOV_URL}?vigenciadesde=${fecha}T00:00:00.000`;
@@ -21,14 +12,23 @@ async function fetchTrmFromGov(fecha) {
   return parseFloat(data[0].valor);
 }
 
+async function fetchTrmConFallback(fecha) {
+  let d = new Date(fecha + 'T12:00:00Z');
+  for (let i = 0; i < 7; i++) {
+    const f = d.toISOString().slice(0, 10);
+    const valor = await fetchTrmFromGov(f);
+    if (valor) return { fecha: f, valor, esDiaHabil: i === 0 };
+    d.setDate(d.getDate() - 1);
+  }
+  return null;
+}
+
 async function fetchTrmRangeFromGov(start, end) {
   const url = `${DATOS_GOV_URL}?$where=vigenciadesde>='${start}T00:00:00.000' AND vigenciahasta<='${end}T23:59:59.000'&$limit=200&$order=vigenciadesde ASC`;
   const r = await fetch(url);
   if (!r.ok) throw new Error(`datos.gov.co error: ${r.status}`);
   return r.json();
 }
-
-// ── Frankfurter ───────────────────────────────────────────────────────────────
 
 async function fetchForex(fecha) {
   const esHoy = fecha === hoy();
@@ -41,8 +41,6 @@ async function fetchForex(fecha) {
   return data.rates || {};
 }
 
-// ── Utils ─────────────────────────────────────────────────────────────────────
-
 function hoy() {
   return new Date().toLocaleString('sv-SE', { timeZone: 'America/Bogota' }).slice(0, 10);
 }
@@ -54,37 +52,46 @@ function json(data, status = 200) {
   });
 }
 
-function corsHeaders(env) {
+function corsHeaders() {
   return {
-    'Access-Control-Allow-Origin': env.CORS_ORIGIN || '*',
+    'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   };
 }
 
-function withCors(response, env) {
+function withCors(response) {
   const headers = new Headers(response.headers);
-  Object.entries(corsHeaders(env)).forEach(([k, v]) => headers.set(k, v));
+  Object.entries(corsHeaders()).forEach(([k, v]) => headers.set(k, v));
   return new Response(response.body, { status: response.status, headers });
 }
 
-// ── Handlers ──────────────────────────────────────────────────────────────────
-
 async function handleTrmToday() {
   const fecha = hoy();
-  const valor = await fetchTrmFromGov(fecha);
-  if (!valor) return json({ error: 'TRM no disponible para hoy todavía. La Superfinanciera la publica después de las 9am.' }, 404);
-  return json({ fecha, valor, fuente: 'Superfinanciera / datos.gov.co' });
+  const result = await fetchTrmConFallback(fecha);
+  if (!result) return json({ error: 'TRM no disponible. Intenta más tarde.' }, 404);
+  return json({
+    fecha: result.fecha,
+    fechaSolicitada: fecha,
+    valor: result.valor,
+    esDiaHabil: result.esDiaHabil,
+    fuente: 'Superfinanciera / datos.gov.co'
+  });
 }
 
 async function handleTrmDate(url) {
   const fecha = url.searchParams.get('fecha');
-  if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
-    return json({ error: 'Parámetro fecha requerido en formato YYYY-MM-DD' }, 400);
-  }
-  const valor = await fetchTrmFromGov(fecha);
-  if (!valor) return json({ error: `TRM no encontrada para ${fecha}. Recuerda que no hay TRM en fines de semana ni festivos.` }, 404);
-  return json({ fecha, valor, fuente: 'Superfinanciera / datos.gov.co' });
+  if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha))
+    return json({ error: 'Parámetro fecha requerido: YYYY-MM-DD' }, 400);
+  const result = await fetchTrmConFallback(fecha);
+  if (!result) return json({ error: `TRM no encontrada para ${fecha}.` }, 404);
+  return json({
+    fecha: result.fecha,
+    fechaSolicitada: fecha,
+    valor: result.valor,
+    esDiaHabil: result.esDiaHabil,
+    fuente: 'Superfinanciera / datos.gov.co'
+  });
 }
 
 async function handleTrmRange(url) {
@@ -107,29 +114,26 @@ async function handleForex(fecha) {
   return json({ fecha, base: 'USD', rates: filtered, fuente: 'frankfurter.app' });
 }
 
-// ── Router ────────────────────────────────────────────────────────────────────
-
 export default {
-  async fetch(request, env) {
+  async fetch(request) {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { status: 204, headers: corsHeaders(env) });
-    }
+    if (request.method === 'OPTIONS')
+      return new Response(null, { status: 204, headers: corsHeaders() });
 
     let response;
     try {
-      if (path === '/trm/today')       response = await handleTrmToday();
-      else if (path === '/trm/date')   response = await handleTrmDate(url);
-      else if (path === '/trm/range')  response = await handleTrmRange(url);
-      else if (path === '/forex/today') response = await handleForex(null);
-      else if (path === '/forex/date') response = await handleForex(url.searchParams.get('fecha'));
+      if (path === '/trm/today')         response = await handleTrmToday();
+      else if (path === '/trm/date')     response = await handleTrmDate(url);
+      else if (path === '/trm/range')    response = await handleTrmRange(url);
+      else if (path === '/forex/today')  response = await handleForex(null);
+      else if (path === '/forex/date')   response = await handleForex(url.searchParams.get('fecha'));
       else response = json({ error: 'Ruta no encontrada' }, 404);
     } catch (err) {
       response = json({ error: err.message }, 500);
     }
 
-    return withCors(response, env);
+    return withCors(response);
   },
 };
