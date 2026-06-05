@@ -24,41 +24,67 @@ function getRange(days) {
 }
 
 function exportExcel(data, start, end) {
-  const TAB = '\t'
-  const NL = '\n'
   const BOM = '\uFEFF'
-  const lines = []
+  const esc = (v) => String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  const estiloHeader = 's="1"'
+  const estiloNum = 's="2"'
 
-  lines.push(`TRM PRO${TAB}Histórico USD/COP`)
-  lines.push(`Generado${TAB}${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`)
-  lines.push(`Rango${TAB}${start} al ${end}`)
-  lines.push(`Registros${TAB}${data.length}`)
-  lines.push(`Fuente${TAB}Superfinanciera de Colombia / datos.gov.co`)
-  lines.push('')
-  lines.push(`Fecha${TAB}Día${TAB}TRM (COP x 1 USD)${TAB}Variación${TAB}% Cambio`)
-
-  data.forEach((r, i) => {
+  const filas = data.map((r, i) => {
     const prev = data[i - 1]
     const variacion = prev ? (r.valor - prev.valor).toFixed(2) : ''
     const pct = prev ? (((r.valor - prev.valor) / prev.valor) * 100).toFixed(4) + '%' : ''
     const fecha = new Date(r.fecha + 'T12:00:00')
     const fechaFmt = fecha.toLocaleDateString('es-CO', { year: 'numeric', month: '2-digit', day: '2-digit' })
     const diaSemana = fecha.toLocaleDateString('es-CO', { weekday: 'long' })
-    lines.push(`${fechaFmt}${TAB}${diaSemana}${TAB}${r.valor.toFixed(2)}${TAB}${variacion}${TAB}${pct}`)
-  })
+    return `<Row>
+      <Cell><Data ss:Type="String">${esc(fechaFmt)}</Data></Cell>
+      <Cell><Data ss:Type="String">${esc(diaSemana)}</Data></Cell>
+      <Cell><Data ss:Type="Number">${r.valor.toFixed(2)}</Data></Cell>
+      <Cell><Data ss:Type="${variacion ? 'Number' : 'String'}">${esc(variacion)}</Data></Cell>
+      <Cell><Data ss:Type="String">${esc(pct)}</Data></Cell>
+    </Row>`
+  }).join('\n')
 
-  lines.push('')
   const promedioVal = data.reduce((a, r) => a + r.valor, 0) / data.length
   const minVal = Math.min(...data.map(r => r.valor))
   const maxVal = Math.max(...data.map(r => r.valor))
-  lines.push(`RESUMEN`)
-  lines.push(`Promedio${TAB}${promedioVal.toFixed(2)}`)
-  lines.push(`Mínimo${TAB}${minVal.toFixed(2)}`)
-  lines.push(`Máximo${TAB}${maxVal.toFixed(2)}`)
-  lines.push(`Variación total${TAB}${(data[data.length-1]?.valor - data[0]?.valor).toFixed(2)}`)
+  const variacionTotal = (data[data.length-1]?.valor - data[0]?.valor).toFixed(2)
 
-  const content = BOM + lines.join(NL)
-  const blob = new Blob([content], { type: 'text/tab-separated-values;charset=utf-8;' })
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+  <Styles>
+    <Style ss:ID="1"><Font ss:Bold="1"/></Style>
+    <Style ss:ID="2"><NumberFormat ss:Format="#,##0.00"/></Style>
+  </Styles>
+  <Worksheet ss:Name="TRM Historico">
+    <Table>
+      <Row><Cell ${estiloHeader}><Data ss:Type="String">TRM PRO</Data></Cell><Cell><Data ss:Type="String">Historico USD/COP</Data></Cell></Row>
+      <Row><Cell ${estiloHeader}><Data ss:Type="String">Generado</Data></Cell><Cell><Data ss:Type="String">${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</Data></Cell></Row>
+      <Row><Cell ${estiloHeader}><Data ss:Type="String">Rango</Data></Cell><Cell><Data ss:Type="String">${start} al ${end}</Data></Cell></Row>
+      <Row><Cell ${estiloHeader}><Data ss:Type="String">Registros</Data></Cell><Cell><Data ss:Type="Number">${data.length}</Data></Cell></Row>
+      <Row><Cell ${estiloHeader}><Data ss:Type="String">Fuente</Data></Cell><Cell><Data ss:Type="String">Superfinanciera de Colombia / datos.gov.co</Data></Cell></Row>
+      <Row></Row>
+      <Row>
+        <Cell ${estiloHeader}><Data ss:Type="String">Fecha</Data></Cell>
+        <Cell ${estiloHeader}><Data ss:Type="String">Dia</Data></Cell>
+        <Cell ${estiloHeader}><Data ss:Type="String">TRM (COP x 1 USD)</Data></Cell>
+        <Cell ${estiloHeader}><Data ss:Type="String">Variacion</Data></Cell>
+        <Cell ${estiloHeader}><Data ss:Type="String">% Cambio</Data></Cell>
+      </Row>
+      ${filas}
+      <Row></Row>
+      <Row><Cell ${estiloHeader}><Data ss:Type="String">RESUMEN</Data></Cell></Row>
+      <Row><Cell ${estiloHeader}><Data ss:Type="String">Promedio</Data></Cell><Cell ${estiloNum}><Data ss:Type="Number">${promedioVal.toFixed(2)}</Data></Cell></Row>
+      <Row><Cell ${estiloHeader}><Data ss:Type="String">Minimo</Data></Cell><Cell ${estiloNum}><Data ss:Type="Number">${minVal.toFixed(2)}</Data></Cell></Row>
+      <Row><Cell ${estiloHeader}><Data ss:Type="String">Maximo</Data></Cell><Cell ${estiloNum}><Data ss:Type="Number">${maxVal.toFixed(2)}</Data></Cell></Row>
+      <Row><Cell ${estiloHeader}><Data ss:Type="String">Variacion total</Data></Cell><Cell ${estiloNum}><Data ss:Type="Number">${variacionTotal}</Data></Cell></Row>
+    </Table>
+  </Worksheet>
+</Workbook>`
+
+  const blob = new Blob([BOM + xml], { type: 'application/vnd.ms-excel;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -116,7 +142,7 @@ export function GraficaHistorica() {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <BarChart2 size={16} className="text-gray-400" />
-          <h2 className="text-sm font-medium text-gray-500">Histórico TRM</h2>
+          <h2 className="text-sm font-medium text-gray-500">Historico TRM</h2>
         </div>
         {data.length > 0 && (
           <button
@@ -157,9 +183,9 @@ export function GraficaHistorica() {
       {data.length > 0 && (
         <div className="grid grid-cols-3 gap-3 mb-4">
           {[
-            { label: 'Mínimo', value: minVal, color: 'text-green-600' },
+            { label: 'Minimo', value: minVal, color: 'text-green-600' },
             { label: 'Promedio', value: promedio, color: 'text-indigo-600' },
-            { label: 'Máximo', value: maxVal, color: 'text-red-500' },
+            { label: 'Maximo', value: maxVal, color: 'text-red-500' },
           ].map(s => (
             <div key={s.label} className="bg-gray-50 rounded-xl p-3 text-center">
               <p className="text-xs text-gray-400 mb-1">{s.label}</p>
@@ -176,7 +202,7 @@ export function GraficaHistorica() {
 
       {!loading && !cargado && (
         <div className="h-48 flex flex-col items-center justify-center gap-3">
-          <p className="text-gray-300 text-sm">Seleccioná un rango y cargá los datos</p>
+          <p className="text-gray-300 text-sm">Selecciona un rango y carga los datos</p>
           <button onClick={cargar} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm hover:bg-indigo-700">
             Cargar datos
           </button>
