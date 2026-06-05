@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useTrmFecha } from '../hooks/useTrm'
 import { Search } from 'lucide-react'
 
-export function ConsultaFecha() {
+export function ConsultaFecha({ onResult }) {
   const [input, setInput] = useState('')
   const [fecha, setFecha] = useState(null)
   const { data, loading, error } = useTrmFecha(fecha)
@@ -16,6 +16,8 @@ export function ConsultaFecha() {
   }).format(v)
 
   const esFinDeSemana = data && data.fecha !== data.fechaSolicitada
+
+  if (data && onResult) onResult(data.fechaSolicitada || data.fecha, data.valor)
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 p-6">
