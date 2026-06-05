@@ -23,14 +23,36 @@ function getRange(days) {
   }
 }
 
-function exportCSV(data) {
-  const header = 'Fecha,TRM (COP)\n'
-  const rows = data.map(r => `${r.fecha},${r.valor}`).join('\n')
-  const blob = new Blob([header + rows], { type: 'text/csv' })
+function exportCSV(data, start, end) {
+  const BOM = '\uFEFF'
+  const title = `TRM PRO — Histórico USD/COP\n`
+  const generado = `Generado: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}\n`
+  const rango = `Rango: ${start} al ${end}\n`
+  const separator = `${'─'.repeat(40)}\n`
+  const header = `Fecha,TRM (COP por 1 USD),Variación,% Cambio\n`
+
+  const rows = data.map((r, i) => {
+    const prev = data[i - 1]
+    const variacion = prev ? (r.valor - prev.valor).toFixed(2) : '—'
+    const pct = prev ? (((r.valor - prev.valor) / prev.valor) * 100).toFixed(4) : '—'
+    const fechaFmt = new Date(r.fecha + 'T12:00:00').toLocaleDateString('es-CO', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    })
+    return `"${fechaFmt}","${r.valor.toLocaleString('es-CO', { minimumFractionDigits: 2 })}","${variacion}","${pct}%"`
+  }).join('\n')
+
+  const promedioVal = data.reduce((a, r) => a + r.valor, 0) / data.length
+  const minVal = Math.min(...data.map(r => r.valor))
+  const maxVal = Math.max(...data.map(r => r.valor))
+
+  const summary = `\n${'─'.repeat(40)}\nResumen\nPromedio,${promedioVal.toFixed(2)}\nMínimo,${minVal.toFixed(2)}\nMáximo,${maxVal.toFixed(2)}\nRegistros,${data.length}\nFuente,Superfinanciera de Colombia / datos.gov.co\n`
+
+  const content = BOM + title + generado + rango + separator + header + rows + summary
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `trm-historico-${new Date().toISOString().slice(0, 10)}.csv`
+  a.download = `TRM-PRO_${start}_${end}.csv`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -39,19 +61,20 @@ const CustomTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-white border border-gray-100 rounded-xl shadow-sm px-3 py-2">
-      <p className="text-xs text-gray-400">{payload[0].payload.fecha}</p>
+      <p className="text-xs text-gray-400">{payload[0].payload.fechaFull}</p>
       <p className="text-sm font-semibold text-indigo-700">
-        {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP' }).format(payload[0].value)}
+        {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 2 }).format(payload[0].value)}
       </p>
     </div>
   )
 }
 
 export function GraficaHistorica() {
-  const [rangoActivo, setRangoActivo] = useState(1) // 30D por defecto
+  const [rangoActivo, setRangoActivo] = useState(1)
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
   const [useCustom, setUseCustom] = useState(false)
+  const [cargado, setCargado] = useState(false)
 
   const rangoPreset = getRange(RANGOS[rangoActivo].days)
   const start = useCustom ? customStart : rangoPreset.start
@@ -59,26 +82,23 @@ export function GraficaHistorica() {
 
   const { data, loading, error, buscar } = useTrmRango(start, end)
 
-  // Cargar preset automáticamente al cambiar
+  const cargar = () => { buscar(); setCargado(true) }
+
   const selectPreset = (i) => {
     setRangoActivo(i)
     setUseCustom(false)
+    setCargado(false)
   }
 
-  // Auto-cargar al montar
-  useState(() => { buscar() }, [])
-
-  const promedio = data.length
-    ? data.reduce((a, r) => a + parseFloat(r.valor), 0) / data.length
-    : 0
-
+  const promedio = data.length ? data.reduce((a, r) => a + parseFloat(r.valor), 0) / data.length : 0
   const minVal = data.length ? Math.min(...data.map(r => parseFloat(r.valor))) : 0
   const maxVal = data.length ? Math.max(...data.map(r => parseFloat(r.valor))) : 0
 
   const chartData = data.map(r => ({
     ...r,
     valor: parseFloat(r.valor),
-    fecha: r.fecha.slice(5), // MM-DD
+    fechaFull: new Date(r.fecha + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' }),
+    fecha: r.fecha.slice(5),
   }))
 
   return (
@@ -90,7 +110,7 @@ export function GraficaHistorica() {
         </div>
         {data.length > 0 && (
           <button
-            onClick={() => exportCSV(data)}
+            onClick={() => exportCSV(data, start, end)}
             className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 border border-indigo-100 px-2.5 py-1.5 rounded-lg"
           >
             <Download size={12} />
@@ -99,7 +119,6 @@ export function GraficaHistorica() {
         )}
       </div>
 
-      {/* Selector rango */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         {RANGOS.map((r, i) => (
           <button
@@ -115,39 +134,26 @@ export function GraficaHistorica() {
           </button>
         ))}
         <div className="flex items-center gap-1 ml-auto">
-          <input
-            type="date"
-            value={customStart}
-            onChange={e => setCustomStart(e.target.value)}
-            className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
-          />
+          <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)}
+            className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400" />
           <span className="text-gray-300 text-xs">→</span>
-          <input
-            type="date"
-            value={customEnd}
-            onChange={e => setCustomEnd(e.target.value)}
-            className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
-          />
-          <button
-            onClick={() => { setUseCustom(true); buscar() }}
-            className="bg-indigo-600 text-white px-2.5 py-1 rounded-lg text-xs"
-          >
-            Ir
-          </button>
+          <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)}
+            className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400" />
+          <button onClick={() => { setUseCustom(true); cargar() }}
+            className="bg-indigo-600 text-white px-2.5 py-1 rounded-lg text-xs">Ir</button>
         </div>
       </div>
 
-      {/* Stats */}
       {data.length > 0 && (
         <div className="grid grid-cols-3 gap-3 mb-4">
           {[
-            { label: 'Mínimo', value: minVal },
-            { label: 'Promedio', value: promedio },
-            { label: 'Máximo', value: maxVal },
+            { label: 'Mínimo', value: minVal, color: 'text-green-600' },
+            { label: 'Promedio', value: promedio, color: 'text-indigo-600' },
+            { label: 'Máximo', value: maxVal, color: 'text-red-500' },
           ].map(s => (
             <div key={s.label} className="bg-gray-50 rounded-xl p-3 text-center">
               <p className="text-xs text-gray-400 mb-1">{s.label}</p>
-              <p className="text-sm font-semibold text-gray-800">
+              <p className={`text-sm font-semibold ${s.color}`}>
                 {new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(s.value)}
               </p>
             </div>
@@ -155,63 +161,40 @@ export function GraficaHistorica() {
         </div>
       )}
 
-      {/* Gráfica */}
-      {loading && (
-        <div className="h-48 bg-gray-50 rounded-xl animate-pulse" />
-      )}
+      {loading && <div className="h-48 bg-gray-50 rounded-xl animate-pulse" />}
       {error && <p className="text-sm text-red-500">{error}</p>}
-      {!loading && !data.length && (
-        <div className="h-48 flex items-center justify-center text-gray-300 text-sm">
-          Selecciona un rango para ver el histórico
+
+      {!loading && !cargado && (
+        <div className="h-48 flex flex-col items-center justify-center gap-3">
+          <p className="text-gray-300 text-sm">Seleccioná un rango y cargá los datos</p>
+          <button onClick={cargar} className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm hover:bg-indigo-700">
+            Cargar datos
+          </button>
         </div>
       )}
+
+      {!loading && cargado && data.length === 0 && (
+        <div className="h-48 flex items-center justify-center text-gray-300 text-sm">
+          Sin datos para este rango
+        </div>
+      )}
+
       {!loading && data.length > 0 && (
         <div className="h-48">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-              <XAxis
-                dataKey="fecha"
-                tick={{ fontSize: 10, fill: '#9ca3af' }}
-                tickLine={false}
-                axisLine={false}
-                interval="preserveStartEnd"
-              />
-              <YAxis
-                tick={{ fontSize: 10, fill: '#9ca3af' }}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={v => v.toLocaleString('es-CO')}
-                domain={['auto', 'auto']}
-                width={60}
-              />
+              <XAxis dataKey="fecha" tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+              <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false}
+                tickFormatter={v => v.toLocaleString('es-CO')} domain={['auto', 'auto']} width={60} />
               <Tooltip content={<CustomTooltip />} />
-              <ReferenceLine
-                y={promedio}
-                stroke="#e0e7ff"
-                strokeDasharray="4 4"
-                label={{ value: 'Prom', fill: '#a5b4fc', fontSize: 10 }}
-              />
-              <Line
-                type="monotone"
-                dataKey="valor"
-                stroke="#4f46e5"
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4, fill: '#4f46e5' }}
-              />
+              <ReferenceLine y={promedio} stroke="#e0e7ff" strokeDasharray="4 4"
+                label={{ value: 'Prom', fill: '#a5b4fc', fontSize: 10 }} />
+              <Line type="monotone" dataKey="valor" stroke="#4f46e5" strokeWidth={2}
+                dot={false} activeDot={{ r: 4, fill: '#4f46e5' }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
-      )}
-
-      {!useCustom && (
-        <button
-          onClick={buscar}
-          className="mt-4 w-full text-xs text-center text-indigo-400 hover:text-indigo-600"
-        >
-          Cargar datos →
-        </button>
       )}
     </div>
   )
