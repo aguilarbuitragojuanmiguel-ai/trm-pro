@@ -23,36 +23,46 @@ function getRange(days) {
   }
 }
 
-function exportCSV(data, start, end) {
+function exportExcel(data, start, end) {
+  const TAB = '\t'
+  const NL = '\n'
   const BOM = '\uFEFF'
-  const title = `TRM PRO — Histórico USD/COP\n`
-  const generado = `Generado: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}\n`
-  const rango = `Rango: ${start} al ${end}\n`
-  const separator = `${'─'.repeat(40)}\n`
-  const header = `Fecha,TRM (COP por 1 USD),Variación,% Cambio\n`
+  const lines = []
 
-  const rows = data.map((r, i) => {
+  lines.push(`TRM PRO${TAB}Histórico USD/COP`)
+  lines.push(`Generado${TAB}${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`)
+  lines.push(`Rango${TAB}${start} al ${end}`)
+  lines.push(`Registros${TAB}${data.length}`)
+  lines.push(`Fuente${TAB}Superfinanciera de Colombia / datos.gov.co`)
+  lines.push('')
+  lines.push(`Fecha${TAB}Día${TAB}TRM (COP x 1 USD)${TAB}Variación${TAB}% Cambio`)
+
+  data.forEach((r, i) => {
     const prev = data[i - 1]
-    const variacion = prev ? (r.valor - prev.valor).toFixed(2) : '—'
-    const pct = prev ? (((r.valor - prev.valor) / prev.valor) * 100).toFixed(4) : '—'
-    const fechaFmt = new Date(r.fecha + 'T12:00:00').toLocaleDateString('es-CO', {
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-    })
-    return `"${fechaFmt}","${r.valor.toLocaleString('es-CO', { minimumFractionDigits: 2 })}","${variacion}","${pct}%"`
-  }).join('\n')
+    const variacion = prev ? (r.valor - prev.valor).toFixed(2) : ''
+    const pct = prev ? (((r.valor - prev.valor) / prev.valor) * 100).toFixed(4) + '%' : ''
+    const fecha = new Date(r.fecha + 'T12:00:00')
+    const fechaFmt = fecha.toLocaleDateString('es-CO', { year: 'numeric', month: '2-digit', day: '2-digit' })
+    const diaSemana = fecha.toLocaleDateString('es-CO', { weekday: 'long' })
+    lines.push(`${fechaFmt}${TAB}${diaSemana}${TAB}${r.valor.toFixed(2)}${TAB}${variacion}${TAB}${pct}`)
+  })
 
+  lines.push('')
   const promedioVal = data.reduce((a, r) => a + r.valor, 0) / data.length
   const minVal = Math.min(...data.map(r => r.valor))
   const maxVal = Math.max(...data.map(r => r.valor))
+  lines.push(`RESUMEN`)
+  lines.push(`Promedio${TAB}${promedioVal.toFixed(2)}`)
+  lines.push(`Mínimo${TAB}${minVal.toFixed(2)}`)
+  lines.push(`Máximo${TAB}${maxVal.toFixed(2)}`)
+  lines.push(`Variación total${TAB}${(data[data.length-1]?.valor - data[0]?.valor).toFixed(2)}`)
 
-  const summary = `\n${'─'.repeat(40)}\nResumen\nPromedio,${promedioVal.toFixed(2)}\nMínimo,${minVal.toFixed(2)}\nMáximo,${maxVal.toFixed(2)}\nRegistros,${data.length}\nFuente,Superfinanciera de Colombia / datos.gov.co\n`
-
-  const content = BOM + title + generado + rango + separator + header + rows + summary
-  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' })
+  const content = BOM + lines.join(NL)
+  const blob = new Blob([content], { type: 'text/tab-separated-values;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `TRM-PRO_${start}_${end}.csv`
+  a.download = `TRM-PRO_${start}_${end}.xls`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -110,11 +120,11 @@ export function GraficaHistorica() {
         </div>
         {data.length > 0 && (
           <button
-            onClick={() => exportCSV(data, start, end)}
+            onClick={() => exportExcel(data, start, end)}
             className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 border border-indigo-100 px-2.5 py-1.5 rounded-lg"
           >
             <Download size={12} />
-            CSV
+            Exportar
           </button>
         )}
       </div>
