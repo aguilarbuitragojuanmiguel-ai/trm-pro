@@ -21,6 +21,8 @@ export function TrmHoy() {
     style: 'currency', currency: 'COP', minimumFractionDigits: 2,
   }).format(v)
 
+  const esFinDeSemana = !data?.esDiaHabil && data?.fecha !== data?.fechaSolicitada
+
   return (
     <div className="bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-2xl p-6 text-white">
       <div className="flex items-center justify-between mb-4">
@@ -29,16 +31,24 @@ export function TrmHoy() {
           <span className="text-sm font-medium opacity-80">TRM oficial hoy</span>
         </div>
         <span className="text-xs opacity-60 bg-white/10 px-2 py-1 rounded-full">
-          {data?.fecha}
+          {data?.fechaSolicitada || data?.fecha}
         </span>
       </div>
+
       <p className="text-4xl font-semibold tracking-tight">
         {fmt(data?.valor)}
       </p>
       <p className="text-sm opacity-60 mt-1">por 1 USD</p>
+
+      {esFinDeSemana && (
+        <div className="mt-3 bg-white/10 rounded-xl px-3 py-2 text-xs opacity-80">
+          📅 Fin de semana — TRM vigente del {data?.fecha}
+        </div>
+      )}
+
       <div className="mt-4 pt-4 border-t border-white/20 flex items-center gap-1 text-xs opacity-60">
         <RefreshCw size={12} />
-        <span>Fuente: {data?.fuente === 'cache' ? 'Caché local' : 'Superfinanciera'}</span>
+        <span>Superfinanciera de Colombia</span>
       </div>
     </div>
   )
