@@ -25,70 +25,42 @@ function getRange(days) {
 
 function exportExcel(data, start, end) {
   const BOM = '\uFEFF'
-  const esc = (v) => String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-  const estiloHeader = 's="1"'
-  const estiloNum = 's="2"'
+  const SEP = ';'
+  const lines = []
 
-  const filas = data.map((r, i) => {
+  lines.push(`TRM PRO${SEP}Historico USD/COP`)
+  lines.push(`Generado${SEP}${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`)
+  lines.push(`Rango${SEP}${start} al ${end}`)
+  lines.push(`Registros${SEP}${data.length}`)
+  lines.push(`Fuente${SEP}Superfinanciera de Colombia / datos.gov.co`)
+  lines.push('')
+  lines.push(`Fecha${SEP}Dia${SEP}TRM (COP x 1 USD)${SEP}Variacion${SEP}% Cambio`)
+
+  data.forEach((r, i) => {
     const prev = data[i - 1]
     const variacion = prev ? (r.valor - prev.valor).toFixed(2) : ''
     const pct = prev ? (((r.valor - prev.valor) / prev.valor) * 100).toFixed(4) + '%' : ''
     const fecha = new Date(r.fecha + 'T12:00:00')
     const fechaFmt = fecha.toLocaleDateString('es-CO', { year: 'numeric', month: '2-digit', day: '2-digit' })
     const diaSemana = fecha.toLocaleDateString('es-CO', { weekday: 'long' })
-    return `<Row>
-      <Cell><Data ss:Type="String">${esc(fechaFmt)}</Data></Cell>
-      <Cell><Data ss:Type="String">${esc(diaSemana)}</Data></Cell>
-      <Cell><Data ss:Type="Number">${r.valor.toFixed(2)}</Data></Cell>
-      <Cell><Data ss:Type="${variacion ? 'Number' : 'String'}">${esc(variacion)}</Data></Cell>
-      <Cell><Data ss:Type="String">${esc(pct)}</Data></Cell>
-    </Row>`
-  }).join('\n')
+    lines.push(`${fechaFmt}${SEP}${diaSemana}${SEP}${r.valor.toFixed(2)}${SEP}${variacion}${SEP}${pct}`)
+  })
 
+  lines.push('')
   const promedioVal = data.reduce((a, r) => a + r.valor, 0) / data.length
   const minVal = Math.min(...data.map(r => r.valor))
   const maxVal = Math.max(...data.map(r => r.valor))
-  const variacionTotal = (data[data.length-1]?.valor - data[0]?.valor).toFixed(2)
+  lines.push(`RESUMEN`)
+  lines.push(`Promedio${SEP}${promedioVal.toFixed(2)}`)
+  lines.push(`Minimo${SEP}${minVal.toFixed(2)}`)
+  lines.push(`Maximo${SEP}${maxVal.toFixed(2)}`)
+  lines.push(`Variacion total${SEP}${(data[data.length-1]?.valor - data[0]?.valor).toFixed(2)}`)
 
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
-  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
-  <Styles>
-    <Style ss:ID="1"><Font ss:Bold="1"/></Style>
-    <Style ss:ID="2"><NumberFormat ss:Format="#,##0.00"/></Style>
-  </Styles>
-  <Worksheet ss:Name="TRM Historico">
-    <Table>
-      <Row><Cell ${estiloHeader}><Data ss:Type="String">TRM PRO</Data></Cell><Cell><Data ss:Type="String">Historico USD/COP</Data></Cell></Row>
-      <Row><Cell ${estiloHeader}><Data ss:Type="String">Generado</Data></Cell><Cell><Data ss:Type="String">${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}</Data></Cell></Row>
-      <Row><Cell ${estiloHeader}><Data ss:Type="String">Rango</Data></Cell><Cell><Data ss:Type="String">${start} al ${end}</Data></Cell></Row>
-      <Row><Cell ${estiloHeader}><Data ss:Type="String">Registros</Data></Cell><Cell><Data ss:Type="Number">${data.length}</Data></Cell></Row>
-      <Row><Cell ${estiloHeader}><Data ss:Type="String">Fuente</Data></Cell><Cell><Data ss:Type="String">Superfinanciera de Colombia / datos.gov.co</Data></Cell></Row>
-      <Row></Row>
-      <Row>
-        <Cell ${estiloHeader}><Data ss:Type="String">Fecha</Data></Cell>
-        <Cell ${estiloHeader}><Data ss:Type="String">Dia</Data></Cell>
-        <Cell ${estiloHeader}><Data ss:Type="String">TRM (COP x 1 USD)</Data></Cell>
-        <Cell ${estiloHeader}><Data ss:Type="String">Variacion</Data></Cell>
-        <Cell ${estiloHeader}><Data ss:Type="String">% Cambio</Data></Cell>
-      </Row>
-      ${filas}
-      <Row></Row>
-      <Row><Cell ${estiloHeader}><Data ss:Type="String">RESUMEN</Data></Cell></Row>
-      <Row><Cell ${estiloHeader}><Data ss:Type="String">Promedio</Data></Cell><Cell ${estiloNum}><Data ss:Type="Number">${promedioVal.toFixed(2)}</Data></Cell></Row>
-      <Row><Cell ${estiloHeader}><Data ss:Type="String">Minimo</Data></Cell><Cell ${estiloNum}><Data ss:Type="Number">${minVal.toFixed(2)}</Data></Cell></Row>
-      <Row><Cell ${estiloHeader}><Data ss:Type="String">Maximo</Data></Cell><Cell ${estiloNum}><Data ss:Type="Number">${maxVal.toFixed(2)}</Data></Cell></Row>
-      <Row><Cell ${estiloHeader}><Data ss:Type="String">Variacion total</Data></Cell><Cell ${estiloNum}><Data ss:Type="Number">${variacionTotal}</Data></Cell></Row>
-    </Table>
-  </Worksheet>
-</Workbook>`
-
-  const blob = new Blob([BOM + xml], { type: 'application/vnd.ms-excel;charset=utf-8;' })
+  const blob = new Blob([BOM + lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `TRM-PRO_${start}_${end}.xls`
+  a.download = `TRM-PRO_${start}_${end}.csv`
   a.click()
   URL.revokeObjectURL(url)
 }
