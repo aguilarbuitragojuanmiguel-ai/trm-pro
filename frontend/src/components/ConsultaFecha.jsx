@@ -2,10 +2,15 @@ import { useState } from 'react'
 import { useTrmFecha } from '../hooks/useTrm'
 import { Search } from 'lucide-react'
 
-export function ConsultaFecha({ onResult }) {
+const BANDERAS = {
+  USD: '🇺🇸', EUR: '🇪🇺', GBP: '🇬🇧', CNY: '🇨🇳',
+  CAD: '🇨🇦', MXN: '🇲🇽', CLP: '🇨🇱', BRL: '🇧🇷',
+}
+
+export function ConsultaFecha({ onResult, moneda = 'USD' }) {
   const [input, setInput] = useState('')
   const [fecha, setFecha] = useState(null)
-  const { data, loading, error } = useTrmFecha(fecha)
+  const { data, loading, error } = useTrmFecha(fecha, moneda)
 
   const buscar = () => {
     if (/^\d{4}-\d{2}-\d{2}$/.test(input)) setFecha(input)
@@ -21,7 +26,9 @@ export function ConsultaFecha({ onResult }) {
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 p-6">
-      <h2 className="text-sm font-medium text-gray-500 mb-4">Consulta por fecha</h2>
+      <h2 className="text-sm font-medium text-gray-500 mb-4">
+        Consulta por fecha — {BANDERAS[moneda]} {moneda}/COP
+      </h2>
       <div className="flex gap-2">
         <input
           type="date"
@@ -47,10 +54,10 @@ export function ConsultaFecha({ onResult }) {
         <div className="mt-4 bg-indigo-50 rounded-xl p-4">
           <p className="text-xs text-indigo-400 mb-1">{data.fechaSolicitada || data.fecha}</p>
           <p className="text-2xl font-semibold text-indigo-700">{fmt(data.valor)}</p>
-          <p className="text-xs text-indigo-400 mt-1">por 1 USD</p>
+          <p className="text-xs text-indigo-400 mt-1">por 1 {moneda}</p>
           {esFinDeSemana && (
             <p className="text-xs text-indigo-300 mt-2">
-              📅 Fin de semana / festivo — TRM vigente del {data.fecha}
+              📅 Fin de semana / festivo — tasa vigente del {data.fecha}
             </p>
           )}
         </div>
