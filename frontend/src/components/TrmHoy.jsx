@@ -1,8 +1,13 @@
 import { useTrmHoy } from '../hooks/useTrm'
 import { TrendingUp, RefreshCw } from 'lucide-react'
 
-export function TrmHoy() {
-  const { data, loading, error } = useTrmHoy()
+const BANDERAS = {
+  USD: '🇺🇸', EUR: '🇪🇺', GBP: '🇬🇧', CNY: '🇨🇳',
+  CAD: '🇨🇦', MXN: '🇲🇽', CLP: '🇨🇱', BRL: '🇧🇷',
+}
+
+export function TrmHoy({ moneda = 'USD' }) {
+  const { data, loading, error } = useTrmHoy(moneda)
 
   if (loading) return (
     <div className="bg-white rounded-2xl border border-gray-100 p-6 animate-pulse">
@@ -28,7 +33,9 @@ export function TrmHoy() {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <TrendingUp size={18} className="opacity-80" />
-          <span className="text-sm font-medium opacity-80">TRM oficial hoy</span>
+          <span className="text-sm font-medium opacity-80">
+            {BANDERAS[moneda]} {moneda}/COP hoy
+          </span>
         </div>
         <span className="text-xs opacity-60 bg-white/10 px-2 py-1 rounded-full">
           {data?.fechaSolicitada || data?.fecha}
@@ -38,11 +45,11 @@ export function TrmHoy() {
       <p className="text-4xl font-semibold tracking-tight">
         {fmt(data?.valor)}
       </p>
-      <p className="text-sm opacity-60 mt-1">por 1 USD</p>
+      <p className="text-sm opacity-60 mt-1">por 1 {moneda}</p>
 
       {esFinDeSemana && (
         <div className="mt-3 bg-white/10 rounded-xl px-3 py-2 text-xs opacity-80">
-          📅 Fin de semana — TRM vigente del {data?.fecha}
+          📅 Fin de semana — tasa vigente del {data?.fecha}
         </div>
       )}
 
