@@ -1,8 +1,10 @@
 // TRM PRO — Cloudflare Worker
 const DATOS_GOV_URL = 'https://www.datos.gov.co/resource/32sa-8pi3.json';
 const FRANKFURTER_URL = 'https://api.frankfurter.app';
-const MONEDAS_EXTRA = ['EUR', 'GBP', 'JPY', 'CAD', 'MXN', 'CLP', 'BRL'];
-
+const MONEDAS_EXTRA = ['EUR', 'GBP', 'CNY', 'CAD', 'MXN', 'CLP', 'BRL'];
+ 
+// ── datos.gov.co ──────────────────────────────────────────────────────────────
+ 
 async function fetchTrmFromGov(fecha) {
   const url = `${DATOS_GOV_URL}?vigenciadesde=${fecha}T00:00:00.000`;
   const r = await fetch(url);
@@ -11,7 +13,8 @@ async function fetchTrmFromGov(fecha) {
   if (!data.length) return null;
   return parseFloat(data[0].valor);
 }
-
+ 
+// Busca TRM hacia atrás hasta 7 días para cubrir fines de semana y festivos
 async function fetchTrmConFallback(fecha) {
   let d = new Date(fecha + 'T12:00:00Z');
   for (let i = 0; i < 7; i++) {
@@ -22,14 +25,16 @@ async function fetchTrmConFallback(fecha) {
   }
   return null;
 }
-
+ 
 async function fetchTrmRangeFromGov(start, end) {
   const url = `${DATOS_GOV_URL}?$where=vigenciadesde>='${start}T00:00:00.000' AND vigenciahasta<='${end}T23:59:59.000'&$limit=200&$order=vigenciadesde ASC`;
   const r = await fetch(url);
   if (!r.ok) throw new Error(`datos.gov.co error: ${r.status}`);
   return r.json();
 }
-
+ 
+// ── Frankfurter ───────────────────────────────────────────────────────────────
+ 
 async function fetchForex(fecha) {
   const esHoy = fecha === hoy();
   const url = esHoy
@@ -40,18 +45,20 @@ async function fetchForex(fecha) {
   const data = await r.json();
   return data.rates || {};
 }
-
+ 
+// ── Utils ─────────────────────────────────────────────────────────────────────
+ 
 function hoy() {
   return new Date().toLocaleString('sv-SE', { timeZone: 'America/Bogota' }).slice(0, 10);
 }
-
+ 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
 }
-
+ 
 function corsHeaders() {
   return {
     'Access-Control-Allow-Origin': '*',
@@ -59,13 +66,15 @@ function corsHeaders() {
     'Access-Control-Allow-Headers': 'Content-Type',
   };
 }
-
+ 
 function withCors(response) {
   const headers = new Headers(response.headers);
   Object.entries(corsHeaders()).forEach(([k, v]) => headers.set(k, v));
   return new Response(response.body, { status: response.status, headers });
 }
-
+ 
+// ── Handlers ──────────────────────────────────────────────────────────────────
+ 
 async function handleTrmToday() {
   const fecha = hoy();
   const result = await fetchTrmConFallback(fecha);
@@ -78,7 +87,7 @@ async function handleTrmToday() {
     fuente: 'Superfinanciera / datos.gov.co'
   });
 }
-
+ 
 async function handleTrmDate(url) {
   const fecha = url.searchParams.get('fecha');
   if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha))
@@ -93,7 +102,7 @@ async function handleTrmDate(url) {
     fuente: 'Superfinanciera / datos.gov.co'
   });
 }
-
+ 
 async function handleTrmRange(url) {
   const start = url.searchParams.get('start');
   const end = url.searchParams.get('end');
@@ -105,7 +114,7 @@ async function handleTrmRange(url) {
   }));
   return json(result);
 }
-
+ 
 async function handleForex(fecha) {
   if (!fecha) fecha = hoy();
   const rates = await fetchForex(fecha);
@@ -113,15 +122,17 @@ async function handleForex(fecha) {
   MONEDAS_EXTRA.forEach(m => { if (rates[m]) filtered[m] = rates[m]; });
   return json({ fecha, base: 'USD', rates: filtered, fuente: 'frankfurter.app' });
 }
-
+ 
+// ── Router ────────────────────────────────────────────────────────────────────
+ 
 export default {
   async fetch(request) {
     const url = new URL(request.url);
     const path = url.pathname;
-
+ 
     if (request.method === 'OPTIONS')
       return new Response(null, { status: 204, headers: corsHeaders() });
-
+ 
     let response;
     try {
       if (path === '/trm/today')         response = await handleTrmToday();
@@ -133,7 +144,7 @@ export default {
     } catch (err) {
       response = json({ error: err.message }, 500);
     }
-
+ 
     return withCors(response);
   },
 };
