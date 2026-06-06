@@ -5,7 +5,19 @@ import { GraficaHistorica } from './components/GraficaHistorica'
 import { Calculadora } from './components/Calculadora'
 import { ForexDivisas } from './components/ForexDivisas'
 
+const MONEDAS_SELECTOR = [
+  { code: 'USD', bandera: '🇺🇸', nombre: 'Dólar americano' },
+  { code: 'EUR', bandera: '🇪🇺', nombre: 'Euro' },
+  { code: 'GBP', bandera: '🇬🇧', nombre: 'Libra esterlina' },
+  { code: 'CNY', bandera: '🇨🇳', nombre: 'Renminbi chino' },
+  { code: 'CAD', bandera: '🇨🇦', nombre: 'Dólar canadiense' },
+  { code: 'MXN', bandera: '🇲🇽', nombre: 'Peso mexicano' },
+  { code: 'CLP', bandera: '🇨🇱', nombre: 'Peso chileno' },
+  { code: 'BRL', bandera: '🇧🇷', nombre: 'Real brasileño' },
+]
+
 export default function App() {
+  const [monedaActiva, setMonedaActiva] = useState('USD')
   const [fechaSeleccionada, setFechaSeleccionada] = useState(null)
   const [trmSeleccionada, setTrmSeleccionada] = useState(null)
 
@@ -30,25 +42,47 @@ export default function App() {
         </div>
       </header>
 
+      {/* Selector de moneda global */}
+      <div className="bg-white border-b border-gray-100">
+        <div className="max-w-5xl mx-auto px-6 py-3 flex items-center gap-2 overflow-x-auto">
+          <span className="text-xs text-gray-400 whitespace-nowrap mr-1">Ver vs COP:</span>
+          {MONEDAS_SELECTOR.map(m => (
+            <button
+              key={m.code}
+              onClick={() => setMonedaActiva(m.code)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-colors ${
+                monedaActiva === m.code
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              }`}
+            >
+              <span>{m.bandera}</span>
+              <span>{m.code}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       <main className="max-w-5xl mx-auto px-6 py-8 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <TrmHoy />
+          <TrmHoy moneda={monedaActiva} />
           <ConsultaFecha
-            onResult={(fecha, trm) => {
+            moneda={monedaActiva}
+            onResult={(fecha, tasa) => {
               setFechaSeleccionada(fecha)
-              setTrmSeleccionada(trm)
+              setTrmSeleccionada(tasa)
             }}
           />
         </div>
-        <GraficaHistorica />
+        <GraficaHistorica moneda={monedaActiva} />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Calculadora fechaExterna={fechaSeleccionada} trmExterna={trmSeleccionada} />
-          <ForexDivisas />
+          <Calculadora fechaExterna={fechaSeleccionada} trmExterna={trmSeleccionada} monedaBase={monedaActiva} />
+          <ForexDivisas monedaActiva={monedaActiva} />
         </div>
       </main>
 
       <footer className="text-center py-6 text-xs text-gray-300">
-        Datos: Superfinanciera Colombia · Frankfurter API · TRM Pro v1.1
+        Datos: Superfinanciera Colombia · Frankfurter API · TRM Pro v1.2
       </footer>
     </div>
   )
