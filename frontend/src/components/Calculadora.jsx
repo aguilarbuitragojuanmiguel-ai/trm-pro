@@ -7,7 +7,7 @@ const MONEDAS = {
   USD: { nombre: 'Dólar americano', bandera: '🇺🇸', decimales: 2 },
   EUR: { nombre: 'Euro', bandera: '🇪🇺', decimales: 2 },
   GBP: { nombre: 'Libra esterlina', bandera: '🇬🇧', decimales: 2 },
-  JPY: { nombre: 'Yen japonés', bandera: '🇯🇵', decimales: 0 },
+  CNY: { nombre: 'Renminbi chino', bandera: '🇨🇳', decimales: 2 },
   CAD: { nombre: 'Dólar canadiense', bandera: '🇨🇦', decimales: 2 },
   MXN: { nombre: 'Peso mexicano', bandera: '🇲🇽', decimales: 2 },
   CLP: { nombre: 'Peso chileno', bandera: '🇨🇱', decimales: 0 },
@@ -23,6 +23,7 @@ export function Calculadora({ fechaExterna, trmExterna }) {
   const [showOrigen, setShowOrigen] = useState(false)
   const [showDestino, setShowDestino] = useState(false)
 
+  // Usar TRM externa (de fecha seleccionada) si existe, sino la de hoy
   const trm = trmExterna || trmData?.valor || 0
   const rates = forexData?.rates || {}
   const usandoFechaExterna = !!trmExterna && trmExterna !== trmData?.valor
@@ -105,9 +106,12 @@ export function Calculadora({ fechaExterna, trmExterna }) {
         <span className="text-xs text-gray-300">TRM: {trm.toLocaleString('es-CO')}</span>
       </div>
 
-      {usandoFechaExterna ? (
-        <p className="text-xs text-indigo-400 mb-3">📅 Usando TRM del {fechaExterna}</p>
-      ) : (
+      {usandoFechaExterna && (
+        <p className="text-xs text-indigo-400 mb-3">
+          📅 Usando TRM del {fechaExterna}
+        </p>
+      )}
+      {!usandoFechaExterna && (
         <p className="text-xs text-gray-300 mb-3">TRM de hoy · Buscá una fecha para cambiarla</p>
       )}
 
