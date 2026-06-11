@@ -10,6 +10,8 @@ const MONEDAS_SELECTOR = [
   { code: 'EUR', bandera: '🇪🇺', nombre: 'Euro' },
   { code: 'GBP', bandera: '🇬🇧', nombre: 'Libra esterlina' },
   { code: 'CNY', bandera: '🇨🇳', nombre: 'Renminbi chino' },
+  { code: 'CHF', bandera: '🇨🇭', nombre: 'Franco suizo' },
+  { code: 'PAB', bandera: '🇵🇦', nombre: 'Balboa panameño' },
   { code: 'CAD', bandera: '🇨🇦', nombre: 'Dólar canadiense' },
   { code: 'MXN', bandera: '🇲🇽', nombre: 'Peso mexicano' },
   { code: 'CLP', bandera: '🇨🇱', nombre: 'Peso chileno' },
@@ -42,7 +44,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* Selector de moneda global */}
       <div className="bg-white border-b border-gray-100">
         <div className="max-w-5xl mx-auto px-6 py-3 flex items-center gap-2 overflow-x-auto">
           <span className="text-xs text-gray-400 whitespace-nowrap mr-1">Ver vs COP:</span>
@@ -50,6 +51,7 @@ export default function App() {
             <button
               key={m.code}
               onClick={() => setMonedaActiva(m.code)}
+              title={m.nombre}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-colors ${
                 monedaActiva === m.code
                   ? 'bg-indigo-600 text-white'
