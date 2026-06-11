@@ -5,16 +5,18 @@ import { Globe } from 'lucide-react'
 const MONEDAS = {
   EUR: { nombre: 'Euro', bandera: '🇪🇺' },
   GBP: { nombre: 'Libra esterlina', bandera: '🇬🇧' },
-  JPY: { nombre: 'Yen japonés', bandera: '🇯🇵' },
+  CNY: { nombre: 'Renminbi chino', bandera: '🇨🇳' },
+  CHF: { nombre: 'Franco suizo', bandera: '🇨🇭' },
+  PAB: { nombre: 'Balboa panameño', bandera: '🇵🇦' },
   CAD: { nombre: 'Dólar canadiense', bandera: '🇨🇦' },
   MXN: { nombre: 'Peso mexicano', bandera: '🇲🇽' },
   CLP: { nombre: 'Peso chileno', bandera: '🇨🇱' },
   BRL: { nombre: 'Real brasileño', bandera: '🇧🇷' },
 }
 
-export function ForexDivisas() {
+export function ForexDivisas({ monedaActiva }) {
   const { data: forex, loading, error } = useForex(null)
-  const { data: trmData } = useTrmHoy()
+  const { data: trmData } = useTrmHoy('USD')
 
   const trm = trmData?.valor || 0
 
@@ -40,13 +42,11 @@ export function ForexDivisas() {
 
   const rates = forex?.rates || {}
 
-  // Calcular COP por moneda usando TRM como puente: 1 EUR = (1/EUR_USD_rate) USD * TRM
-  const copPorMoneda = (codMoneda) => {
-    const tasaVsUSD = rates[codMoneda]
+  const copPorMoneda = (code) => {
+    if (code === 'PAB') return trm // 1:1 con USD
+    const tasaVsUSD = rates[code]
     if (!tasaVsUSD || !trm) return null
-    // Frankfurter: rates son FROM USD, así que 1 USD = X EUR
-    // Para 1 EUR en COP: (1/tasa) * trm
-    return (1 / tasaVsUSD) * trm
+    return trm / tasaVsUSD
   }
 
   return (
@@ -57,23 +57,26 @@ export function ForexDivisas() {
         <span className="text-xs text-gray-300 ml-auto">{forex?.fecha}</span>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-1">
         {Object.entries(MONEDAS).map(([code, info]) => {
           const enCOP = copPorMoneda(code)
           if (!enCOP) return null
+          const isActive = monedaActiva === code
           return (
             <div
               key={code}
-              className="flex items-center justify-between py-2.5 px-3 rounded-xl hover:bg-gray-50 transition-colors"
+              className={`flex items-center justify-between py-2.5 px-3 rounded-xl transition-colors ${
+                isActive ? 'bg-indigo-50' : 'hover:bg-gray-50'
+              }`}
             >
               <div className="flex items-center gap-2.5">
                 <span className="text-lg">{info.bandera}</span>
                 <div>
-                  <p className="text-sm font-medium text-gray-700">{code}</p>
+                  <p className={`text-sm font-medium ${isActive ? 'text-indigo-700' : 'text-gray-700'}`}>{code}</p>
                   <p className="text-xs text-gray-400">{info.nombre}</p>
                 </div>
               </div>
-              <p className="text-sm font-semibold text-gray-800">
+              <p className={`text-sm font-semibold ${isActive ? 'text-indigo-700' : 'text-gray-800'}`}>
                 {fmtCOP(enCOP)}
               </p>
             </div>
@@ -82,7 +85,7 @@ export function ForexDivisas() {
       </div>
 
       <p className="mt-3 text-xs text-gray-300 text-center">
-        Calculado vía TRM × tipo de cambio USD/{'{'}moneda{'}'} — Frankfurter API
+        Frankfurter API · PAB fijo 1:1 USD
       </p>
     </div>
   )
